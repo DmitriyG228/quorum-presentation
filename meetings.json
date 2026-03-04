@@ -1,0 +1,62 @@
+[
+  {
+    "id": "2024-05-17-us-government-stablecoins",
+    "date": "2024-05-17",
+    "title": "FM SIG: US Government and Stablecoins",
+    "entities": ["Franklin Noll", "Nelly Liang", "Brian Brooks", "Tom Emmer", "Perry Merling"]
+  },
+  {
+    "id": "2024-06-14-blockchain-ai-mortgage-mismo",
+    "date": "2024-06-14",
+    "title": "MISMO: Blockchain and AI in Mortgage",
+    "entities": ["James Marvin", "Mark D'Angelo", "David Coleman", "Devin Caster", "CoreLogic", "Omar", "Fannie Mae", "Project Guardian", "JP Morgan", "DBS Bank", "SBI", "Wisdom Tree", "MISMO", "ELDD", "Figur", "LiquidFi", "Redwood Trust", "Hexil Blockchain", "Freddie Mac", "Ginnie Mae", "Hyperledger Foundation"]
+  },
+  {
+    "id": "2024-09-20-dtcc-consensys-conversation",
+    "date": "2024-09-20",
+    "title": "Brian Steele & Joe Lubin in Conversation",
+    "entities": ["Michael Casey", "Brian Steele", "Joe Lubin", "Rob Palatnik", "Javier Taso Perez"]
+  },
+  {
+    "id": "2025-12-10-tag-security-compliance",
+    "date": "2025-12-10",
+    "title": "TAG Security & Compliance",
+    "entities": ["Jen", "Marina", "Evan", "Brandt", "Andy Martin", "Yoshiuki", "John Shell", "Eddie Knight", "William Woodruff", "Justin"]
+  },
+  {
+    "id": "2026-01-07-tag-security-general",
+    "date": "2026-01-07",
+    "title": "TAG Security General",
+    "entities": ["Minder", "Evan", "Ron", "Grant", "Marina", "Matt", "John", "Brandt", "Jen", "Justin", "Eddie Knight", "Stacklock", "SSF", "Andy Martin", "Hubert", "Andrew Nesbit"]
+  },
+  {
+    "id": "2026-01-14-tag-security-general",
+    "date": "2026-01-14",
+    "title": "TAG Security General",
+    "entities": ["Andrew Nesbit", "Evan", "Brandt", "Marina", "Justin", "Eddie Knight", "Andy Martin", "Jen"]
+  },
+  {
+    "id": "2026-01-21-fabric-coap-gateway",
+    "date": "2026-01-21",
+    "title": "Hyperledger Fabric CoAP Gateway",
+    "entities": ["Bernardo", "Artam", "Angelo"]
+  },
+  {
+    "id": "2026-01-22-lf-decentralized-trust-tac",
+    "date": "2026-01-22",
+    "title": "LF Decentralized Trust TAC",
+    "entities": ["Arun", "Diane", "Kevin", "David", "Marcus", "Ryan", "Rama", "Ray", "Emmy", "Ruben", "Sophie", "Kin", "LF Decentralized Trust", "Trust Over IP", "Hyperledger Fabric", "OpenSSL"]
+  },
+  {
+    "id": "2026-02-05-tac-meeting",
+    "date": "2026-02-05",
+    "title": "LF Decentralized Trust TAC",
+    "entities": ["Arun", "Diane", "Marcus", "Rama", "Kevin", "David", "Men", "Kenchan", "Hendrick", "Ry", "Alvaro", "LF Decentralized Trust", "Consensus", "Hyperledger Besu", "Trust Over IP"]
+  },
+  {
+    "id": "2026-02-11-steering-committee",
+    "date": "2026-02-11",
+    "title": "Trust Over IP Steering Committee",
+    "entities": ["Carly", "Drummond Reed", "David Boswell", "Nicholas", "Sam Smith", "Carla", "Scott", "John Phillips", "Jory Buren", "Nico", "Daniela", "Wenjing", "Mackie", "Jim Zen", "Martina", "Min", "Kerry Suite", "Digital Object Identifier", "CERN", "Zenoto", "Ry Jones", "Creator Assertions", "Trust Over IP", "DCIF", "C2PA", "Leonard Rosenthal", "Kerry Foundation"]
+  }
+]

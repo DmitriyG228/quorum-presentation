@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quorum — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+    background: #fafafa;
+    color: #1a1a1a;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .header {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 16px 28px;
+    display: flex; align-items: baseline; gap: 10px;
+    z-index: 100; font-size: 15px;
+  }
+  .header-title { font-weight: 700; font-size: 18px; }
+  .header-sep { color: #ccc; }
+  .header-sub { color: #999; font-size: 14px; }
+  .header-nav {
+    position: fixed; top: 14px; right: 28px;
+    font-size: 15px; font-weight: 600; color: #555;
+    text-decoration: none; transition: color 0.2s;
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+    padding: 8px 18px;
+  }
+  .header-nav:hover { color: #111; border-color: #bbb; }
+
+  .slide {
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 56px 32px 24px;
+  }
+
+  .arch {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0; width: 100%; max-width: 1050px;
+  }
+
+  /* --- Shared layer styles --- */
+  .layer {
+    border-radius: 16px;
+    padding: 16px 24px;
+    width: 100%;
+  }
+  .layer-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .layer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .layer-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .layer-tech { font-size: 11px; font-weight: 400; opacity: 0.5; margin-left: auto; white-space: nowrap; }
+  .layer-items {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center;
+  }
+  .layer-item {
+    padding: 5px 12px; border-radius: 9px;
+    font-size: 12px; font-weight: 500;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(0,0,0,0.07);
+    white-space: nowrap;
+  }
+  .layer-item.code {
+    font-weight: 600;
+    background: rgba(255,255,255,0.85);
+    border-color: rgba(0,0,0,0.12);
+  }
+
+  /* --- Integrations (top) --- */
+  .l-integrations {
+    background: linear-gradient(135deg, #fdf2f8, #fce7f3);
+    border: 2.5px solid #f9a8d4;
+    margin-bottom: 12px;
+  }
+  .l-integrations .layer-dot { background: #ec4899; }
+  .l-integrations .layer-name { color: #be185d; }
+
+  /* --- Middle row: Dashboard+API | CLI --- */
+  .middle-row {
+    display: flex; gap: 14px; width: 100%;
+    margin-bottom: 12px;
+  }
+
+  /* Dashboard wraps API (left) */
+  .l-dashboard {
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    border: 2.5px solid #fdba74;
+    flex: 1;
+  }
+  .l-dashboard .layer-dot { background: #f97316; }
+  .l-dashboard .layer-name { color: #c2410c; }
+
+  .l-api {
+    background: linear-gradient(135deg, #faf5ff, #ede9fe);
+    border: 2.5px solid #c4b5fd;
+    margin-top: 12px;
+  }
+  .l-api .layer-dot { background: #8b5cf6; }
+  .l-api .layer-name { color: #7c3aed; }
+
+  /* CLI (right, standalone) */
+  .l-cli {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 2.5px solid #93c5fd;
+    width: 320px; flex-shrink: 0;
+    align-self: stretch;
+  }
+  .l-cli .layer-dot { background: #3b82f6; }
+  .l-cli .layer-name { color: #1d4ed8; }
+
+  /* --- Core (bottom, full width) --- */
+  .l-core {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 2.5px solid #86efac;
+    text-align: center;
+  }
+  .l-core .layer-dot { background: #22c55e; }
+  .l-core .layer-name { color: #15803d; }
+  .l-core .layer-head { justify-content: center; }
+  .l-core .layer-desc {
+    font-size: 10.5px; color: #888; text-align: center;
+    line-height: 1.5; margin-top: 8px;
+  }
+
+  /* --- Connector arrows --- */
+  .connectors {
+    display: flex; width: 100%; justify-content: center;
+    gap: 0; height: 20px; margin-bottom: 0;
+    position: relative;
+  }
+  .connector-arrow {
+    color: #ccc; font-size: 18px; text-align: center;
+  }
+  .connectors-mid {
+    display: flex; width: 100%; height: 20px;
+    position: relative;
+  }
+  .connectors-mid::before, .connectors-mid::after {
+    content: ''; position: absolute; top: 0;
+    width: 2px; height: 100%; background: #ddd;
+  }
+  .connectors-mid::before { left: calc(50% - 137px - 7px + (50% - 137px) / 2); }
+  .connectors-mid::after { right: calc(130px + 65px); }
+
+  /* --- Bottom badges --- */
+  .bottom-row {
+    display: flex; gap: 12px; margin-top: 14px;
+    align-items: center; justify-content: center;
+  }
+  .bottom-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(0,0,0,0.08);
+    font-size: 11.5px; font-weight: 600; color: #555;
+    white-space: nowrap;
+  }
+  .bottom-badge svg { flex-shrink: 0; }
+
+  /* --- Flow lines (SVG overlay) --- */
+  .flow-svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-title">Quorum</span>
+  <span class="header-sep">/</span>
+  <span class="header-sub">Architecture</span>
+</div>
+<a href="graph.html" class="header-nav">&larr; Demo</a>
+
+<div class="slide">
+  <div class="arch">
+
+    <!-- Integrations (top) -->
+    <div class="layer l-integrations">
+      <div class="layer-head">
+        <span class="layer-dot"></span>
+        <span class="layer-name">Integrations</span>
+      </div>
+      <div class="layer-items">
+        <div class="layer-item code">Vexa</div>
+        <div class="layer-item code">Fluxnova</div>
+        <div class="layer-item">n8n</div>
+        <div class="layer-item">Jira</div>
+        <div class="layer-item">GitHub</div>
+      </div>
+    </div>
+
+    <!-- Middle: Dashboard+API (left) | CLI (right) -->
+    <div class="middle-row">
+
+      <div class="layer l-dashboard">
+        <div class="layer-head">
+          <span class="layer-dot"></span>
+          <span class="layer-name">Dashboard</span>
+          <span class="layer-tech">Next.js · React · Tailwind</span>
+        </div>
+        <div class="layer-items">
+          <div class="layer-item">workspaces</div>
+          <div class="layer-item">entities</div>
+          <div class="layer-item">diff review</div>
+          <div class="layer-item">CALM viz</div>
+        </div>
+
+        <!-- API nested inside Dashboard (Dashboard calls API) -->
+        <div class="layer l-api">
+          <div class="layer-head">
+            <span class="layer-dot"></span>
+            <span class="layer-name">REST API</span>
+            <span class="layer-tech">FastAPI :8090</span>
+          </div>
+          <div class="layer-items">
+            <div class="layer-item code">POST /init</div>
+            <div class="layer-item code">POST /input</div>
+            <div class="layer-item code">POST /process</div>
+            <div class="layer-item code">GET /status</div>
+            <div class="layer-item code">GET /diff/{hash}</div>
+            <div class="layer-item code">POST /approve</div>
+            <div class="layer-item code">POST /reject</div>
+            <div class="layer-item code">POST /commit</div>
+            <div class="layer-item code">GET /knowledge</div>
+            <div class="layer-item code">PUT /knowledge</div>
+            <div class="layer-item code">GET /history</div>
+            <div class="layer-item code">POST /unlock</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer l-cli">
+        <div class="layer-head">
+          <span class="layer-dot"></span>
+          <span class="layer-name">CLI</span>
+          <span class="layer-tech">qrum · typer</span>
+        </div>
+        <div class="layer-items">
+          <div class="layer-item code">process</div>
+          <div class="layer-item code">batch</div>
+          <div class="layer-item code">diff</div>
+          <div class="layer-item code">edit</div>
+          <div class="layer-item code">approve</div>
+          <div class="layer-item code">reject</div>
+          <div class="layer-item code">chat</div>
+          <div class="layer-item code">status</div>
+          <div class="layer-item">workspace init</div>
+          <div class="layer-item">workspace list</div>
+          <div class="layer-item">workspace use</div>
+          <div class="layer-item">workspace github</div>
+          <div class="layer-item">knowledge list</div>
+          <div class="layer-item">knowledge show</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Core (bottom, shared foundation) -->
+    <div class="layer l-core">
+      <div class="layer-head">
+        <span class="layer-dot"></span>
+        <span class="layer-name">Core</span>
+        <span class="layer-tech">6 files · zero deps</span>
+      </div>
+      <div class="layer-items">
+        <div class="layer-item code">WorkspaceManager</div>
+        <div class="layer-item code">run_agent()</div>
+        <div class="layer-item code">WorkspaceLockManager</div>
+        <div class="layer-item code">CoreSettings</div>
+        <div class="layer-item code">FileDiff</div>
+        <div class="layer-item code">FileEntry</div>
+        <div class="layer-item code">LogEntry</div>
+        <div class="layer-item code">OPENCLAW_PROMPT</div>
+      </div>
+      <div class="layer-desc">
+        git per user · 3-layer sandbox
+      </div>
+    </div>
+
+    <div class="bottom-row">
+      <div class="bottom-badge">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#F05032"><path d="M23.546 10.93L13.067.452c-.604-.603-1.582-.603-2.188 0L8.708 2.627l2.76 2.76c.645-.215 1.379-.07 1.889.441.516.515.658 1.258.438 1.9l2.658 2.66c.645-.223 1.387-.078 1.9.435.721.72.721 1.884 0 2.604-.719.719-1.881.719-2.6 0-.539-.541-.674-1.337-.404-1.996L12.86 8.955v6.525c.176.086.342.203.488.348.713.721.713 1.883 0 2.6-.719.721-1.889.721-2.609 0-.719-.719-.719-1.879 0-2.598.182-.18.387-.316.605-.406V8.835c-.217-.091-.424-.222-.6-.401-.545-.545-.676-1.342-.396-2.009L7.636 3.7.45 10.881c-.6.605-.6 1.584 0 2.189l10.48 10.477c.604.604 1.582.604 2.186 0l10.43-10.43c.605-.603.605-1.582 0-2.187"/></svg>
+        git-versioned
+      </div>
+      <div class="bottom-badge">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5.5-3.8 10-8 12-4.2-2-8-6.5-8-12V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>
+        sandboxed
+      </div>
+      <div class="bottom-badge">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        multi-tenant
+      </div>
+      <div class="bottom-badge">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        human-in-the-loop
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

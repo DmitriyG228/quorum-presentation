@@ -1,0 +1,2259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quorum — Entity Graph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #fafafa;
+    color: #171717;
+    overflow: hidden;
+  }
+
+  .page-header {
+    position: fixed; top: 16px; left: 20px;
+    display: flex; align-items: center; gap: 12px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    z-index: 100;
+  }
+  .page-header .ph-name {
+    font-size: 24px; font-weight: 600; color: #171717;
+    letter-spacing: -0.02em;
+  }
+  .page-header .ph-sep {
+    font-size: 20px; color: #d4d4d4;
+  }
+  .page-header .ph-event {
+    font-size: 18px; font-weight: 400; color: #a3a3a3;
+  }
+  .page-header .ph-nav {
+    margin-left: auto; position: fixed; top: 20px; right: 28px;
+    font-size: 14px; font-weight: 500; color: #a3a3a3;
+    text-decoration: none; transition: color 0.2s;
+  }
+  .page-header .ph-nav:hover { color: #555; }
+
+  .legend {
+    position: fixed; bottom: 20px; right: 140px;
+    display: flex; flex-direction: row; gap: 18px; background: #fff; border: 1px solid #e5e5e5;
+    border-radius: 10px; padding: 12px 22px; z-index: 100;
+    font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #737373;
+  }
+  .legend .item { display: flex; align-items: center; gap: 10px; }
+  .legend .swatch { width: 18px; height: 18px; border-radius: 50%; }
+  .legend .swatch.contact { background: #7dd3fc; }
+  .legend .swatch.company { background: #c4b5fd; }
+  .legend .swatch.product { background: #fbbf24; }
+  .legend .swatch.meeting { background: #a7f3d0; }
+
+  .stats {
+    position: fixed; bottom: 20px; right: 20px;
+    font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #a3a3a3;
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 10px 20px;
+    z-index: 100;
+  }
+
+  canvas { display: block; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    position: fixed; top: 0; right: 0; width: 400px; height: 100vh;
+    background: #fff; border-left: 1px solid #e5e5e5;
+    transform: translateX(100%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 200;
+    display: flex; flex-direction: column;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.04);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sidebar-header {
+    padding: 24px 24px 18px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .sidebar-header .entity-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; font-weight: 500; color: #171717;
+  }
+  .sidebar-header .entity-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; color: #a3a3a3; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-top: 6px;
+  }
+  .sidebar-header .entity-type .type-dot {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+  .sidebar-close {
+    width: 40px; height: 40px; border-radius: 8px; border: 1px solid #e5e5e5;
+    background: #fff; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; color: #a3a3a3; font-size: 22px; flex-shrink: 0;
+  }
+  .sidebar-close:hover { background: #f5f5f5; color: #525252; }
+
+  .sidebar-body {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+  }
+
+  .sidebar-section {
+    margin-bottom: 24px;
+  }
+  .sidebar-section h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500; color: #a3a3a3;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px;
+  }
+
+  .conn-list {
+    list-style: none; display: flex; flex-direction: column; gap: 3px;
+  }
+  .conn-list li {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px; color: #525252;
+    padding: 7px 10px; border-radius: 8px;
+    cursor: pointer; transition: background 0.1s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .conn-list li:hover { background: #f5f5f5; }
+  .conn-list li .cdot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .conn-stats {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; color: #a3a3a3; margin-top: 4px;
+  }
+
+  .entity-content {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 17px; line-height: 1.7; color: #525252;
+    word-break: break-word;
+  }
+  .entity-content h1, .entity-content h2, .entity-content h3 {
+    font-family: 'Inter', sans-serif;
+    color: #171717; font-size: 19px; font-weight: 600;
+    margin: 16px 0 6px; line-height: 1.3;
+  }
+  .entity-content h1:first-child, .entity-content h2:first-child, .entity-content h3:first-child {
+    margin-top: 0;
+  }
+  .entity-content p { margin: 6px 0 10px; }
+  .entity-content ul, .entity-content ol {
+    margin: 6px 0 10px; padding-left: 20px;
+  }
+  .entity-content li { margin: 3px 0; }
+  .entity-content strong { color: #171717; font-weight: 600; }
+  .entity-content em { font-style: italic; }
+  .entity-content code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; background: #f5f5f5; padding: 2px 5px;
+    border-radius: 4px; color: #404040;
+  }
+  .entity-content a.wiki-link {
+    color: #7dd3fc; text-decoration: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 16px;
+  }
+  .entity-content a.wiki-link:hover { text-decoration: underline; }
+  .entity-content a.wiki-link.meeting-link { color: #34d399; }
+  .entity-content-loading {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; color: #d4d4d4; font-style: italic;
+  }
+
+  /* ── Workflow mode chrome ── */
+  body.wf-mode .legend,
+  body.wf-mode .stats { opacity: 0; pointer-events: none; }
+  .legend, .stats { transition: opacity 0.6s ease; }
+
+  .wf-back {
+    position: fixed; top: 14px; left: 360px;
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
+    padding: 10px 18px; cursor: pointer; z-index: 200;
+    font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #525252;
+    opacity: 1; pointer-events: auto;
+    transition: opacity 0.4s ease, background 0.15s;
+  }
+  .wf-back:hover { background: #f5f5f5; border-color: #d4d4d4; }
+  /* Back button visible in wf-mode (to go back to outer), hidden in outer-mode */
+  .page-header { transition: opacity 0.4s ease; }
+  .wf-back svg {
+    width: 22px; height: 22px; stroke: currentColor; fill: none;
+    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  .workflow-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .workflow-overlay.visible { pointer-events: auto; }
+
+  .workflow-stage {
+    position: relative;
+    width: 900px; height: 560px;
+    opacity: 0;
+    transform: scale(1.15);
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .workflow-overlay.visible .workflow-stage {
+    opacity: 1; transform: scale(1.35);
+  }
+
+  .workflow-stage svg.wf-svg {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* Arrow tracks */
+  .wf-track { fill: none; stroke: #d4d4d4; stroke-width: 2.5; }
+  .wf-track-dim { fill: none; stroke: #d4d4d4; stroke-width: 2; stroke-dasharray: 6 4; }
+
+  /* Self-loop on knowledge */
+  .wf-selfloop { fill: none; stroke: #e5e5e5; stroke-width: 1.5; }
+  .wf-selfloop-glow {
+    fill: none; stroke: #34d399; stroke-width: 4;
+    stroke-linecap: round;
+    opacity: 0;
+    filter: drop-shadow(0 0 4px rgba(52,211,153,0.3));
+    transition: opacity 0.4s;
+  }
+  .wf-selfloop-glow.active {
+    opacity: 0.7;
+    stroke-dasharray: 30 200;
+    animation: wf-selfloop-anim 2s linear infinite;
+  }
+  @keyframes wf-selfloop-anim {
+    0%   { stroke-dashoffset: 230; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  /* Node active states */
+  .wf-node.wf-green, .wf-node.wf-green {
+    border-color: #34d399;
+    box-shadow: 0 0 0 6px #fafafa, 0 0 14px rgba(52,211,153,0.3);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .wf-node.wf-orange {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 6px #fafafa, 0 0 14px rgba(245,158,11,0.3);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .wf-knowledge-box.wf-green {
+    border-color: #34d399;
+    box-shadow: 0 0 20px rgba(52,211,153,0.2);
+  }
+  .wf-knowledge-box.wf-pulse {
+    animation: wf-box-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes wf-box-pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(52,211,153,0.15); }
+    50% { box-shadow: 0 0 28px rgba(52,211,153,0.35); }
+  }
+
+  /* Transcript send button */
+  .wf-send-btn {
+    position: absolute;
+    top: 164px; left: 24px;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: #34d399;
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 4;
+    box-shadow: 0 2px 8px rgba(52,211,153,0.4);
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.3s;
+    animation: wf-send-pulse 2s ease-in-out infinite;
+  }
+  @keyframes wf-send-pulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(52,211,153,0.4); }
+    50% { box-shadow: 0 2px 16px rgba(52,211,153,0.7); }
+  }
+  .wf-send-btn:hover { transform: scale(1.1); }
+  .wf-send-btn:active { transform: scale(0.95); }
+  .wf-send-btn:disabled { opacity: 0.3; cursor: default; transform: none;
+    box-shadow: none; animation: none; }
+  .wf-send-btn svg {
+    width: 22px; height: 22px; stroke: #fff; fill: #fff;
+    stroke-width: 0;
+  }
+
+  /* Human action buttons */
+  .wf-human-actions {
+    position: absolute;
+    top: 496px; left: 640px;
+    display: flex; gap: 6px;
+    z-index: 4;
+    opacity: 0; pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .wf-human-actions.visible {
+    opacity: 1; pointer-events: auto; transform: translateY(0);
+  }
+  .wf-action-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1.5px solid #e5e5e5;
+    background: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .wf-action-btn:hover { transform: translateY(-1px); }
+  .wf-action-btn:active { transform: translateY(0); }
+  .wf-action-btn.approve { color: #059669; border-color: #a7f3d0; }
+  .wf-action-btn.approve:hover { background: #ecfdf5; border-color: #34d399; }
+  .wf-action-btn.edit { color: #525252; }
+  .wf-action-btn.edit:hover { background: #f5f5f5; border-color: #d4d4d4; }
+  .wf-action-btn.dismiss { color: #dc2626; border-color: #fecaca; }
+  .wf-action-btn.dismiss:hover { background: #fef2f2; border-color: #ef4444; }
+
+  /* Chevrons */
+  .wf-chevron {
+    fill: none; stroke: #d4d4d4; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Nodes */
+  .wf-node {
+    position: absolute; width: 52px; height: 52px;
+    border-radius: 50%; background: #fff;
+    border: 1px solid #e5e5e5;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 6px #fafafa;
+    z-index: 2;
+  }
+  .wf-node svg {
+    width: 22px; height: 22px; stroke: #404040;
+    stroke-width: 1.5; fill: none;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Node positions — left-to-right flow
+     Node centers: transcript(50,206) knowledge(336,206) artifacts(710,206) human(710,434) */
+  .wf-node.wn-transcript { top: 180px; left: 24px; }
+  .wf-node.wn-artifacts  { top: 180px; left: 684px; }
+  .wf-node.wn-human      { top: 408px; left: 684px; }
+
+  /* Knowledge box — contains the tiny graph, clickable */
+  .wf-knowledge-box {
+    position: absolute;
+    width: 240px; height: 200px;
+    top: 106px; left: 216px; /* centered at (336, 206) */
+    border: 1.5px solid #e5e5e5;
+    border-radius: 14px;
+    background: rgba(250,250,250,0.5);
+    cursor: pointer;
+    z-index: 2;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .wf-knowledge-box:hover {
+    border-color: #34d399;
+    box-shadow: 0 0 16px rgba(52,211,153,0.15);
+  }
+
+  /* Labels */
+  .wf-label {
+    position: absolute; white-space: nowrap; z-index: 2;
+  }
+  .wf-label .wf-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; font-weight: 600; color: #171717;
+  }
+  .wf-label .wf-desc {
+    font-size: 13px; font-weight: 400; color: #a3a3a3; margin-top: 3px;
+  }
+
+  .wf-label.wl-transcript { top: 236px; left: 6px; text-align: center; width: 88px; }
+  .wf-label.wl-knowledge  { top: 312px; left: 296px; text-align: center; width: 80px; }
+  .wf-label.wl-artifacts  { top: 236px; left: 672px; text-align: center; width: 76px; }
+  .wf-label.wl-human      { top: 464px; left: 680px; text-align: center; width: 60px; }
+
+  /* Edge labels on arrows */
+  .wf-edge-word {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: #a3a3a3; letter-spacing: 0.03em;
+    background: #fafafa; padding: 0 6px; z-index: 1;
+  }
+
+  /* Dismiss label */
+  .wf-dismissed {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: #d4d4d4; letter-spacing: 0.03em;
+    z-index: 1;
+  }
+
+  /* Knowledge dive hint */
+  .wf-dive-hint {
+    position: absolute;
+    top: 196px; left: 292px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: #a3a3a3;
+    text-align: center; white-space: nowrap; width: 88px;
+    opacity: 0; transition: opacity 0.2s;
+    z-index: 3; pointer-events: none;
+  }
+  .wf-knowledge-box:hover ~ .wf-dive-hint { opacity: 1; }
+
+  /* Meeting counter badge — above self-loop */
+  .wf-meeting-badge {
+    position: absolute;
+    top: 14px; left: 300px;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 6px 16px;
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #525252;
+    z-index: 3;
+  }
+  .wf-meeting-badge .wf-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #34d399;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Git log panel — shows version history accumulating */
+  .wf-git-log {
+    position: absolute;
+    top: 400px; left: 216px;
+    width: 280px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #1a1a2e;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    z-index: 3;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .wf-git-log.visible {
+    opacity: 1; transform: translateY(0);
+  }
+  .wf-git-log-header {
+    color: #737373; font-size: 10px; letter-spacing: 0.05em;
+    text-transform: uppercase; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .wf-git-log-header svg {
+    width: 12px; height: 12px; stroke: #737373; fill: none;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .wf-git-entry {
+    display: flex; gap: 8px; align-items: baseline;
+    opacity: 0; transform: translateX(-8px);
+    animation: wf-git-entry-in 0.3s ease forwards;
+  }
+  @keyframes wf-git-entry-in {
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .wf-git-hash {
+    color: #f59e0b; flex-shrink: 0;
+  }
+  .wf-git-msg {
+    color: #e5e5e5; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .wf-git-entry.dismiss .wf-git-hash { color: #ef4444; }
+  .wf-git-entry.dismiss .wf-git-msg { color: #737373; text-decoration: line-through; }
+  .wf-git-entry.edit .wf-git-hash { color: #a78bfa; }
+
+  /* Agent badge — right of self-loop, these operate during compounding */
+  .wf-agents {
+    position: absolute;
+    top: 56px; left: 430px;
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 3px; z-index: 3;
+  }
+  .wf-agents-row {
+    display: flex; gap: 5px; align-items: center; white-space: nowrap;
+  }
+  .wf-agent-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 0.02em;
+    border: 1px solid;
+  }
+  .wf-agent-pill svg.agent-logo,
+  .wf-agent-pill img.agent-logo {
+    width: 12px; height: 12px; flex-shrink: 0;
+  }
+  .wf-agent-pill.claude { color: #c15f3c; background: #fef7f4; border-color: #f5cbb8; }
+  .wf-agent-pill.codex { color: #171717; background: #f5f5f5; border-color: #e5e5e5; }
+  .wf-agent-pill.openclaw { color: #c83232; background: #fef2f2; border-color: #fecaca; }
+  .wf-agents-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; color: #a3a3a3; letter-spacing: 0.03em;
+  }
+
+  /* Integration badges — right of artifacts after approval */
+  .wf-integrations {
+    position: absolute;
+    top: 276px; left: 670px;
+    display: flex; flex-direction: row; gap: 5px; align-items: center;
+    z-index: 3;
+    opacity: 0; pointer-events: none;
+    transform: translateX(-6px);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .wf-integrations.visible {
+    opacity: 1; pointer-events: auto; transform: translateX(0);
+  }
+  .wf-integrations-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: #a3a3a3; text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .wf-integration-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    border: 1px solid;
+  }
+  .wf-integration-pill.jira {
+    color: #1868db; background: #eff6ff; border-color: #bfdbfe;
+  }
+  .wf-integration-pill.jira svg { width: 14px; height: 14px; }
+  .wf-integration-pill.n8n {
+    color: #ea4b71; background: #fff1f2; border-color: #fecdd3;
+  }
+  .wf-integration-pill.n8n svg { width: 14px; height: 14px; }
+
+  /* Fade-in children */
+  .wf-fi { opacity: 0; transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  .workflow-overlay.visible .wf-fi { opacity: 1; }
+  .wf-fi1 { transition-delay: 0.05s; }
+  .wf-fi2 { transition-delay: 0.15s; }
+  .wf-fi3 { transition-delay: 0.25s; }
+  .wf-fi4 { transition-delay: 0.35s; }
+  .wf-fi5 { transition-delay: 0.45s; }
+  .wf-fi6 { transition-delay: 0.55s; }
+
+  /* ── Outer zoom level — Vexa + Workspace ── */
+  .outer-overlay {
+    position: fixed; inset: 0; z-index: 45;
+    display: flex; align-items: center; justify-content: center;
+    gap: 0;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .outer-overlay.visible { opacity: 1; pointer-events: auto; }
+
+  body.outer-mode .legend,
+  body.outer-mode .stats { opacity: 0; pointer-events: none; }
+  body.outer-mode .wf-back { opacity: 0; pointer-events: none; }
+
+  /* Platforms — outside Vexa, vertically centered */
+  .outer-platforms {
+    display: flex; flex-direction: column; gap: 20px;
+    align-items: flex-end;
+    margin-right: 18px;
+    opacity: 0; transform: translateX(-16px);
+    transition: opacity 0.5s 0.1s, transform 0.5s 0.1s;
+  }
+  .outer-overlay.visible .outer-platforms { opacity: 1; transform: translateX(0); }
+
+  .outer-platform {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #a3a3a3;
+  }
+  .outer-platform-icon {
+    width: 72px; height: 72px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1.5px solid #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .outer-platform-arrow { color: #c0c0c0; font-size: 22px; }
+
+  /* Vexa panel — centered, not full-height */
+  .vexa-panel {
+    width: 280px; flex-shrink: 0;
+    background: #fff;
+    border: 1.5px solid #e5e5e5;
+    border-radius: 18px;
+    padding: 24px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    max-height: 85vh; overflow-y: auto;
+    opacity: 0; transform: translateX(-16px);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  .outer-overlay.visible .vexa-panel { opacity: 1; transform: translateX(0); }
+
+  .vexa-header {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
+  }
+  .vexa-logo {
+    font-family: 'Inter', sans-serif;
+    font-size: 22px; font-weight: 700; color: #171717;
+    letter-spacing: -0.03em;
+  }
+  .vexa-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: #a3a3a3;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    line-height: 1.3;
+  }
+
+  .vexa-badges {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;
+  }
+  .vexa-badge {
+    padding: 2px 8px; border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0;
+  }
+
+  /* Users inside Vexa */
+  .vexa-users { display: flex; flex-direction: column; gap: 4px; }
+  .vexa-user {
+    display: flex; flex-direction: column; gap: 0;
+    padding: 8px 12px; border-radius: 10px;
+    cursor: pointer; border: 1.5px solid transparent;
+    transition: background 0.2s, border-color 0.25s, box-shadow 0.25s;
+  }
+  .vexa-user:hover { background: #f5f5f5; }
+  .vexa-user.active {
+    border-color: #34d399; background: #ecfdf5;
+    box-shadow: 0 0 10px rgba(52,211,153,0.12);
+  }
+  .vexa-user-row {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .vexa-user-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .vexa-user-name {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 600; color: #171717;
+  }
+  /* Meetings list — hidden unless user is active */
+  .vexa-user-meetings {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s, margin 0.3s;
+    margin-top: 0;
+  }
+  .vexa-user.active .vexa-user-meetings {
+    max-height: 200px; opacity: 1; margin-top: 6px;
+  }
+  .vexa-meeting {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #737373;
+    padding: 2px 0 2px 38px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .vexa-meeting-dot {
+    width: 4px; height: 4px; border-radius: 50%; background: #a7f3d0; flex-shrink: 0;
+  }
+
+  /* Arrow Vexa → Workspace */
+  .outer-arrow {
+    font-size: 28px; color: #d4d4d4;
+    margin: 0 20px;
+    opacity: 0;
+    transition: opacity 0.5s 0.2s;
+  }
+  .outer-overlay.visible .outer-arrow { opacity: 1; }
+
+  /* Workspace area */
+  .outer-workspace-area {
+    position: relative;
+    opacity: 0; transform: scale(0.95);
+    transition: opacity 0.5s 0.15s, transform 0.5s 0.15s;
+  }
+  .outer-overlay.visible .outer-workspace-area { opacity: 1; transform: scale(1); }
+
+  .workspace-header {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 12px; padding-left: 4px;
+  }
+  .workspace-header-name {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 20px; font-weight: 700; color: #1a1a1a;
+    letter-spacing: -0.02em;
+  }
+  .workspace-header-desc {
+    font-size: 12px; color: #999; letter-spacing: 0.02em;
+  }
+
+  /* Workspace card — graph window + label */
+  .workspace-card {
+    width: 480px; height: 440px;
+    background: rgba(255,255,255,0.6);
+    border: 2px solid #e5e5e5;
+    border-radius: 20px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 4px 28px rgba(0,0,0,0.06);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+    overflow: hidden;
+  }
+  .workspace-card:hover {
+    border-color: #34d399;
+    box-shadow: 0 8px 36px rgba(52,211,153,0.15);
+    transform: translateY(-3px);
+  }
+  /* Stacked card behind (pure CSS) */
+  .workspace-stack {
+    position: relative;
+  }
+  .workspace-stack::before {
+    content: '';
+    position: absolute; top: 8px; left: 12px; right: 12px; bottom: -8px;
+    background: rgba(255,255,255,0.5);
+    border: 1.5px solid #e5e5e5;
+    border-radius: 20px;
+    z-index: -1;
+  }
+  /* Graph window — transparent so canvas shows through */
+  .workspace-graph {
+    flex: 1;
+    background: transparent;
+    position: relative;
+  }
+  .workspace-badges {
+    position: absolute; bottom: 12px; left: 12px; right: 12px;
+    display: flex; gap: 8px; z-index: 1; justify-content: center;
+  }
+  .workspace-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px 5px 8px; border-radius: 20px;
+    background: rgba(255,255,255,0.92);
+    border: 1.5px solid #e0e0e0;
+    backdrop-filter: blur(6px);
+    font: 600 11px/1 'SF Mono', 'Consolas', monospace;
+    color: #444; letter-spacing: 0.02em;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .workspace-badge svg { flex-shrink: 0; }
+  /* Label bar at bottom */
+  .workspace-label {
+    padding: 16px 24px;
+    background: #fff;
+    border-top: 1px solid #f0f0f0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .workspace-user-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 16px; font-weight: 600; color: #171717;
+  }
+  .workspace-user-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #34d399; font-weight: 500;
+  }
+  .workspace-enter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #a3a3a3;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .workspace-card:hover .workspace-enter { opacity: 1; }
+
+  /* Carousel slide animation */
+  .workspace-card.slide-out {
+    transition: transform 0.25s ease-in, opacity 0.2s;
+    transform: translateX(-40px); opacity: 0;
+  }
+  .workspace-card.slide-in-setup {
+    transition: none;
+    transform: translateX(40px); opacity: 0;
+  }
+  .workspace-card.slide-in {
+    transition: transform 0.3s ease-out, opacity 0.25s;
+    transform: translateX(0); opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <span class="ph-name">Quorum</span>
+  <span class="ph-sep">/</span>
+  <span class="ph-event">DTCC 2026 FINOS Hackathon</span>
+  <a href="architecture.html" class="ph-nav">Architecture →</a>
+</header>
+
+<button class="wf-back" id="wf-back">
+  <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  back
+</button>
+
+<div class="stats" id="stats"></div>
+
+<div class="legend">
+  <div class="item"><div class="swatch contact"></div> contacts</div>
+  <div class="item"><div class="swatch company"></div> companies</div>
+  <div class="item"><div class="swatch product"></div> products</div>
+  <div class="item"><div class="swatch meeting"></div> meetings</div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div>
+      <div class="entity-name" id="sb-name"></div>
+      <div class="entity-type" id="sb-type"></div>
+    </div>
+    <button class="sidebar-close" id="sb-close">&times;</button>
+  </div>
+  <div class="sidebar-body">
+    <div class="sidebar-section">
+      <h4>Profile</h4>
+      <div id="sb-content" class="entity-content-loading">loading...</div>
+    </div>
+    <div class="sidebar-section">
+      <h4>Connections</h4>
+      <div class="conn-stats" id="sb-stats"></div>
+      <ul class="conn-list" id="sb-connections"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- Outer zoom level — Platforms → Vexa → Workspace -->
+<div class="outer-overlay" id="outer-overlay">
+
+  <!-- Left: Platform icons (outside Vexa) -->
+  <div class="outer-platforms">
+    <div class="outer-platform">
+      <div class="outer-platform-icon" title="Google Meet">
+        <svg viewBox="0 0 87.51 72" width="44" height="36" fill="none">
+          <path fill="#00832d" d="M49.5 36l8.53 9.75 11.47 7.33 2-17.02-2-16.64-11.69 6.44z"/><path fill="#0066da" d="M0 51.5V66c0 3.315 2.685 6 6 6h14.5l3-10.96-3-9.54-9.95-3z"/><path fill="#e94235" d="M20.5 0L0 20.5l10.55 3 9.95-3 2.95-9.41z"/><path fill="#2684fc" d="M20.5 20.5H0v31h20.5z"/><path fill="#00ac47" d="M82.6 8.68L69.5 19.42v33.66l13.16 10.79c1.97 1.54 4.85.135 4.85-2.37V11c0-2.535-2.945-3.925-4.91-2.32zM49.5 36v15.5h-29V72h43c3.315 0 6-2.685 6-6V53.08z"/><path fill="#ffba00" d="M63.5 0h-43v20.5h29V36l20-16.57V6c0-3.315-2.685-6-6-6z"/>
+        </svg>
+      </div>
+      <span class="outer-platform-arrow">&rarr;</span>
+    </div>
+    <div class="outer-platform">
+      <div class="outer-platform-icon" title="MS Teams">
+        <svg viewBox="170 90 220 220" width="44" height="44" fill="none">
+          <circle cx="286.875" cy="131.25" fill="#7b83eb" r="32.086"/><circle cx="359.063" cy="141.563" fill="#5059c9" r="24.063"/><path d="m379.688 172.5h-54.045c-2.41 0-4.393 1.983-4.393 4.393v55.756c-.31 16.57 11.12 31.225 27.266 34.96 2.325.488 4.693.733 7.068.733 18.872 0 34.404-15.521 34.416-34.393v-51.137c0-5.657-4.655-10.312-10.312-10.312z" fill="#5059c9"/><path d="m341.875 182.813v65.343c0 30.153-24.812 54.965-54.966 54.965-19.618 0-37.804-10.503-47.609-27.496-1.323-2.199-2.472-4.498-3.438-6.875-.9-2.242-1.657-4.538-2.268-6.875-1.134-4.496-1.711-9.114-1.719-13.75v-65.313c0-5.65 4.649-10.299 10.299-10.299h89.402c5.65 0 10.299 4.649 10.299 10.299z" fill="#7b83eb"/><path d="m179.164 145h91.665c5.027 0 9.164 4.137 9.164 9.164v91.665c0 5.027-4.137 9.164-9.164 9.164h-91.665c-5.027 0-9.164-4.137-9.164-9.164v-91.665c0-5.027 4.137-9.164 9.164-9.164z" fill="#4b53bc"/><path d="m252.363 179.203h-20.55v55.138h-13.502v-55.138h-20.667v-13.544h54.719z" fill="#fff"/>
+        </svg>
+      </div>
+      <span class="outer-platform-arrow">&rarr;</span>
+    </div>
+    <div class="outer-platform">
+      <div class="outer-platform-icon" title="Zoom">
+        <svg viewBox="0 0 48 48" width="44" height="44">
+          <circle style="fill:#2196F3;" cx="24" cy="24" r="20"/><path style="fill:#FFFFFF;" d="M29,31H14c-1.657,0-3-1.343-3-3V17h15c1.657,0,3,1.343,3,3V31z"/><polygon style="fill:#FFFFFF;" points="37,31 31,27 31,21 37,17"/>
+        </svg>
+      </div>
+      <span class="outer-platform-arrow">&rarr;</span>
+    </div>
+  </div>
+
+  <!-- Center-left: Vexa panel -->
+  <div class="vexa-panel">
+    <div class="vexa-header">
+      <svg class="vexa-icon" viewBox="150 150 730 730" width="28" height="28">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M657.89 367.455L760.118 308.797C767.782 304.399 777.56 307.047 781.958 314.712L822.422 385.232C826.82 392.897 824.172 402.675 816.507 407.073L714.28 465.73C603.946 529.039 466 451.575 462.625 324.414L459.376 201.997C459.142 193.164 466.113 185.813 474.946 185.579L556.222 183.422C565.056 183.187 572.407 190.158 572.641 198.991L575.89 321.407C576.99 362.842 621.938 388.083 657.89 367.455ZM316.544 465.963L214.631 406.76C206.991 402.321 204.395 392.528 208.834 384.888L249.674 314.585C254.113 306.944 263.905 304.348 271.546 308.787L373.459 367.99C483.452 431.887 485.34 590.083 376.902 656.587L272.511 720.609C264.978 725.229 255.127 722.867 250.507 715.334L208.001 646.026C203.381 638.493 205.742 628.641 213.275 624.022L317.666 560C353 538.33 352.385 486.783 316.544 465.963ZM556.237 845.957C565.073 845.981 572.256 838.837 572.279 830L572.594 712.14C572.705 670.69 617.039 644.384 653.472 664.149L761.112 722.544C768.879 726.757 778.592 723.877 782.805 716.109L821.575 644.644C825.789 636.876 822.908 627.164 815.141 622.95L707.501 564.556C595.688 503.898 459.63 584.63 459.29 711.837L458.975 829.697C458.952 838.534 466.096 845.716 474.932 845.74L556.237 845.957Z" fill="#323232"/>
+      </svg>
+      <div class="vexa-logo">VEXA</div>
+      <div class="vexa-subtitle">data access<br>persistence &middot; delivery</div>
+    </div>
+    <div class="vexa-badges">
+      <span class="vexa-badge">Apache 2.0</span>
+      <span class="vexa-badge">Open Source</span>
+      <span class="vexa-badge">Self-hosted</span>
+    </div>
+    <div class="vexa-users" id="vexa-users">
+      <div class="vexa-user active" data-user="bob">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #fef3c7;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Bob</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Sprint planning #24</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> 1:1 with Alice</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> API review</div>
+        </div>
+      </div>
+      <div class="vexa-user" data-user="alice">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #dbeafe;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Alice</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Product roadmap</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Investor call</div>
+        </div>
+      </div>
+      <div class="vexa-user" data-user="carol">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #fce7f3;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ec4899" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Carol</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Design review</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> UX sync</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Standup</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Client demo</div>
+        </div>
+      </div>
+      <div class="vexa-user" data-user="dave">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #d1fae5;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#059669" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Dave</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Security audit</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Infra planning</div>
+        </div>
+      </div>
+      <div class="vexa-user" data-user="eve">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #ede9fe;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Eve</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Data pipeline review</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> ML standup</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Model eval</div>
+        </div>
+      </div>
+      <div class="vexa-user" data-user="frank">
+        <div class="vexa-user-row">
+          <div class="vexa-user-avatar" style="background: #ffedd5;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <span class="vexa-user-name">Frank</span>
+        </div>
+        <div class="vexa-user-meetings">
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Sales pipeline</div>
+          <div class="vexa-meeting"><div class="vexa-meeting-dot"></div> Partner call</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow: Vexa → Workspace -->
+  <div class="outer-arrow">&rarr;</div>
+
+  <!-- Right: Workspace card (graph window + label) -->
+  <div class="outer-workspace-area">
+    <div class="workspace-header">
+      <span class="workspace-header-name">Quorum</span>
+      <span class="workspace-header-desc">knowledge workspace</span>
+    </div>
+    <div class="workspace-stack">
+      <div class="workspace-card" id="workspace-card">
+        <div class="workspace-graph">
+          <div class="workspace-badges">
+            <div class="workspace-badge">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="#F05032"><path d="M23.546 10.93L13.067.452c-.604-.603-1.582-.603-2.188 0L8.708 2.627l2.76 2.76c.645-.215 1.379-.07 1.889.441.516.515.658 1.258.438 1.9l2.658 2.66c.645-.223 1.387-.078 1.9.435.721.72.721 1.884 0 2.604-.719.719-1.881.719-2.6 0-.539-.541-.674-1.337-.404-1.996L12.86 8.955v6.525c.176.086.342.203.488.348.713.721.713 1.883 0 2.6-.719.721-1.889.721-2.609 0-.719-.719-.719-1.879 0-2.598.182-.18.387-.316.605-.406V8.835c-.217-.091-.424-.222-.6-.401-.545-.545-.676-1.342-.396-2.009L7.636 3.7.45 10.881c-.6.605-.6 1.584 0 2.189l10.48 10.477c.604.604 1.582.604 2.186 0l10.43-10.43c.605-.603.605-1.582 0-2.187"/></svg>
+              git-versioned
+            </div>
+            <div class="workspace-badge">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2l8 4v6c0 5.5-3.8 10-8 12-4.2-2-8-6.5-8-12V6l8-4z"/><path d="M9 12l2 2 4-4"/>
+              </svg>
+              sandboxed
+            </div>
+            <div class="workspace-badge">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              multi-tenant
+            </div>
+          </div>
+        </div>
+        <div class="workspace-label">
+          <div>
+            <div class="workspace-user-label" id="workspace-user-label">Bob's workspace</div>
+            <div class="workspace-user-sub">knowledge graph</div>
+          </div>
+          <div class="workspace-enter">click to enter &rarr;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Workflow overlay -->
+<div class="workflow-overlay" id="workflow-overlay">
+  <div class="workflow-stage">
+    <svg class="wf-svg" viewBox="0 0 900 560">
+      <defs>
+        <marker id="wf-ah" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#d4d4d4"/>
+        </marker>
+
+        <!-- Self-loop on Knowledge: arc above the box, top edge at y=106 -->
+        <path id="wf-selfloop-path" d="M 296 110 C 290 40, 382 40, 376 110"/>
+
+        <!-- Happy path for glow: transcript→knowledge box→artifacts↓human→knowledge -->
+        <path id="wf-happy" d="
+          M 76 206
+          L 216 206
+          L 456 206
+          L 684 206
+          L 710 232
+          L 710 408
+          L 684 434
+          L 336 434
+          L 336 306
+        "/>
+      </defs>
+
+      <!-- Self-loop track + glow -->
+      <use href="#wf-selfloop-path" class="wf-selfloop"/>
+      <use href="#wf-selfloop-path" class="wf-selfloop-glow"/>
+      <path d="M 372 115 l 6 -9 4 6" class="wf-chevron"/>
+
+      <!-- Transcript → Knowledge box left edge -->
+      <line x1="76" y1="206" x2="216" y2="206" class="wf-track" marker-end="url(#wf-ah)"/>
+      <!-- Knowledge box right edge → Artifacts -->
+      <line x1="456" y1="206" x2="684" y2="206" class="wf-track" marker-end="url(#wf-ah)"/>
+      <!-- Artifacts → Human (down) -->
+      <line x1="710" y1="232" x2="710" y2="408" class="wf-track" marker-end="url(#wf-ah)"/>
+      <!-- Human → approve → Knowledge box bottom edge -->
+      <path d="M 684 434 L 336 434 L 336 306" class="wf-track" marker-end="url(#wf-ah)"/>
+
+      <!-- Dismiss path: human → down-right -->
+      <line x1="730" y1="456" x2="760" y2="520" class="wf-track-dim" marker-end="url(#wf-ah)"/>
+
+      <!-- Runner dot (JS-driven) -->
+      <circle id="wf-dot" cx="50" cy="206" r="8" fill="#34d399" opacity="0"
+        filter="url(#wf-dot-filter)"/>
+      <defs>
+        <filter id="wf-dot-filter" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Chevrons showing direction -->
+      <path d="M 148 200 l 7 6 -7 6" class="wf-chevron"/>
+      <path d="M 566 200 l 7 6 -7 6" class="wf-chevron"/>
+      <path d="M 704 320 l 6 7 -6 7" class="wf-chevron"/>
+      <path d="M 510 428 l -7 -6 7 -6" class="wf-chevron"/>
+
+      <!-- Edge labels -->
+      <text x="128" y="194" font-family="'JetBrains Mono', monospace" font-size="13" fill="#a3a3a3">ingest</text>
+      <text x="544" y="194" font-family="'JetBrains Mono', monospace" font-size="13" fill="#a3a3a3">generate</text>
+      <text x="722" y="326" font-family="'JetBrains Mono', monospace" font-size="13" fill="#a3a3a3">review</text>
+      <text x="430" y="424" font-family="'JetBrains Mono', monospace" font-size="13" fill="#a3a3a3">approve · git commit</text>
+      <text x="766" y="516" font-family="'JetBrains Mono', monospace" font-size="13" fill="#d4d4d4">dismiss</text>
+    </svg>
+
+    <!-- Transcript node (left) + send button -->
+    <div class="wf-node wn-transcript wf-fi wf-fi1">
+      <svg viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+    </div>
+    <button class="wf-send-btn wf-fi wf-fi1" id="wf-send" title="Send transcript">
+      <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+    <div class="wf-label wl-transcript wf-fi wf-fi1">
+      <div class="wf-name">transcript</div>
+      <div class="wf-desc">raw meeting recording</div>
+    </div>
+
+    <!-- Knowledge box — frames the tiny graph, clickable to dive in -->
+    <div class="wf-knowledge-box wf-fi wf-fi2" id="wf-dive"></div>
+    <div class="wf-label wl-knowledge wf-fi wf-fi2">
+      <div class="wf-name">knowledge</div>
+      <div class="wf-desc">git-versioned</div>
+    </div>
+    <div class="wf-dive-hint">click to explore →</div>
+
+    <!-- Meeting counter badge above knowledge -->
+    <div class="wf-meeting-badge wf-fi wf-fi3">
+      <div class="wf-dot"></div>
+      <span>meeting <span id="wf-counter">N</span></span>
+    </div>
+
+    <!-- Agent badges — near self-loop, these operate during compounding -->
+    <div class="wf-agents wf-fi wf-fi3">
+      <div class="wf-agents-row">
+        <span class="wf-agent-pill claude">
+          <img class="agent-logo" src="data:image/png;base64,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"/>
+          Claude Code
+        </span>
+        <span class="wf-agent-pill codex">
+          <svg class="agent-logo" viewBox="0 0 24 24"><path d="M12 2l9 5.2v9.6L12 22l-9-5.2V7.2Z" fill="none" stroke="#171717" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="#171717"/></svg>
+          Codex
+        </span>
+        <span class="wf-agent-pill openclaw">
+          <svg class="agent-logo" viewBox="0 0 24 24"><path d="M8 4C5 4 3 6.5 3 9.5v5C3 17.5 5 20 8 20M16 4c3 0 5 2.5 5 5.5v5c0 3-2 5.5-5 5.5" stroke="#c83232" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+          OpenClaw
+        </span>
+      </div>
+      <div class="wf-agents-sub">+ self-hosted models</div>
+    </div>
+
+    <!-- Artifacts node (right) -->
+    <div class="wf-node wn-artifacts wf-fi wf-fi3">
+      <svg viewBox="0 0 24 24">
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+        <path d="M14 2v4a1 1 0 0 0 1 1h3"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <line x1="10" y1="9" x2="8" y2="9"/>
+      </svg>
+    </div>
+    <div class="wf-label wl-artifacts wf-fi wf-fi3">
+      <div class="wf-name">artifacts</div>
+      <div class="wf-desc">structured diffs</div>
+    </div>
+
+    <!-- Integration badges — shown after human approval -->
+    <div class="wf-integrations">
+      <div class="wf-integrations-label">output →</div>
+      <div class="wf-integration-pill jira">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L2 12l10 10 10-10L12 2z" fill="#1868db" opacity="0.15"/>
+          <path d="M12 6l6 6-6 6-6-6 6-6z" fill="#1868db"/>
+        </svg>
+        Jira
+      </div>
+      <div class="wf-integration-pill n8n">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="6" cy="12" r="3" fill="#ea4b71" opacity="0.3"/>
+          <circle cx="18" cy="12" r="3" fill="#ea4b71" opacity="0.3"/>
+          <line x1="9" y1="12" x2="15" y2="12" stroke="#ea4b71" stroke-width="2"/>
+          <circle cx="6" cy="12" r="1.5" fill="#ea4b71"/>
+          <circle cx="18" cy="12" r="1.5" fill="#ea4b71"/>
+        </svg>
+        n8n
+      </div>
+    </div>
+
+    <!-- Human node (bottom-right) -->
+    <div class="wf-node wn-human wf-fi wf-fi4">
+      <svg viewBox="0 0 24 24">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </div>
+    <div class="wf-label wl-human wf-fi wf-fi4">
+      <div class="wf-name">human</div>
+      <div class="wf-desc">approve or dismiss</div>
+    </div>
+
+    <!-- Human action buttons (appear when runner arrives) -->
+    <div class="wf-human-actions" id="wf-human-actions">
+      <button class="wf-action-btn approve" id="wf-approve">approve</button>
+      <button class="wf-action-btn edit" id="wf-edit">edit</button>
+      <button class="wf-action-btn dismiss" id="wf-dismiss">dismiss</button>
+    </div>
+
+    <!-- Git version log — grows as actions are taken -->
+    <div class="wf-git-log" id="wf-git-log">
+      <div class="wf-git-log-header">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="21"/></svg>
+        git log --oneline
+      </div>
+      <div id="wf-git-entries"></div>
+    </div>
+
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+const COLORS = { contact: '#7dd3fc', company: '#c4b5fd', product: '#fbbf24', meeting: '#a7f3d0' };
+const TYPE_LABELS = { contact: 'contact', company: 'company', product: 'product', meeting: 'meeting' };
+
+let nodes = [], edges = [], adj = {};
+let meetings = [], meetingEdges = []; // meeting nodes + edges to entities
+let W, H, canvas, ctx;
+let drag = null, hovered = null, selected = null;
+let hoveredMeeting = null;
+let panX = 0, panY = 0, isPanning = false, panStart = null;
+let scale = 1;
+
+// Force simulation — entities only (scaled up for screensharing)
+const REPULSION = 200;
+const ATTRACTION = 0.06;
+const REST_LEN = 50;
+const DAMPING = 0.76;
+const CENTER_PULL = 0.02;
+
+// Timeline layout
+const TIMELINE_X = -520; // world-space X for meeting column
+
+async function init() {
+  const [graphRes, meetingsRes] = await Promise.all([
+    fetch('graph.json'), fetch('meetings.json')
+  ]);
+  const data = await graphRes.json();
+  const meetingsData = await meetingsRes.json();
+
+  nodes = data.nodes.map((n, i) => ({
+    ...n, x: 0, y: 0, vx: 0, vy: 0, idx: i
+  }));
+
+  const idMap = {};
+  nodes.forEach((n, i) => { idMap[n.id] = i; adj[i] = []; });
+
+  edges = [];
+  const seen = new Set();
+  data.edges.forEach(e => {
+    const si = idMap[e.source], ti = idMap[e.target];
+    if (si === undefined || ti === undefined) return;
+    const key = si < ti ? `${si}-${ti}` : `${ti}-${si}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push([si, ti]);
+    adj[si].push(ti);
+    adj[ti].push(si);
+  });
+
+  // Build meeting nodes — fixed positions along timeline
+  const totalMeetings = meetingsData.length;
+  const timelineHeight = Math.max(400, totalMeetings * 72);
+  const startY = -timelineHeight / 2;
+
+  meetings = meetingsData.map((m, i) => ({
+    ...m,
+    type: 'meeting',
+    x: TIMELINE_X,
+    y: startY + i * (timelineHeight / (totalMeetings - 1 || 1)),
+    idx: i,
+    entityIndices: [] // will be populated below
+  }));
+
+  // Build meeting→entity edges
+  meetingEdges = [];
+  meetings.forEach((m, mi) => {
+    m.entities.forEach(eName => {
+      const ei = idMap[eName];
+      if (ei !== undefined) {
+        meetingEdges.push([mi, ei]);
+        m.entityIndices.push(ei);
+      }
+    });
+  });
+
+  document.getElementById('stats').textContent =
+    `${nodes.length} entities · ${meetings.length} meetings · ${edges.length + meetingEdges.length} edges`;
+
+  // Initial layout — rings by type, shifted right to make room for timeline
+  const GRAPH_OFFSET_X = 120;
+  const byType = { contact: [], company: [], product: [] };
+  nodes.forEach(n => (byType[n.type] || byType.contact).push(n));
+  byType.company.forEach((n, i) => {
+    const a = (i / byType.company.length) * Math.PI * 2;
+    n.x = Math.cos(a) * 140 + (Math.random() - 0.5) * 30 + GRAPH_OFFSET_X;
+    n.y = Math.sin(a) * 110 + (Math.random() - 0.5) * 30;
+  });
+  byType.contact.forEach((n, i) => {
+    const a = (i / byType.contact.length) * Math.PI * 2;
+    n.x = Math.cos(a) * 280 + (Math.random() - 0.5) * 40 + GRAPH_OFFSET_X;
+    n.y = Math.sin(a) * 220 + (Math.random() - 0.5) * 40;
+  });
+  byType.product.forEach((n, i) => {
+    const a = (i / byType.product.length) * Math.PI * 2;
+    n.x = Math.cos(a) * 200 + (Math.random() - 0.5) * 30 + GRAPH_OFFSET_X;
+    n.y = Math.sin(a) * 160 + (Math.random() - 0.5) * 30;
+  });
+
+  canvas = document.getElementById('c');
+  ctx = canvas.getContext('2d');
+  resize();
+
+  // Auto-fit: after a short settle, compute bounding box and fit to viewport
+  // Run 120 physics ticks to settle the layout, then fit
+  for (let t = 0; t < 120; t++) tick();
+  autoFit();
+
+  // Save the graph camera for dive-in, then start in workflow (zoomed out)
+  graphScale = scale;
+  graphPanX = panX;
+  graphPanY = panY;
+  scale = OUTER_SCALE;
+  targetScale = OUTER_SCALE;
+  // Show outer overlay immediately (new default start)
+  document.body.classList.add('outer-mode');
+  outerOverlay.classList.add('visible');
+  // Position graph inside workspace card (card is in DOM, layout is ready)
+  requestAnimationFrame(() => {
+    const outerPan = getOuterPan();
+    panX = outerPan.x; panY = outerPan.y;
+    targetPanX = outerPan.x; targetPanY = outerPan.y;
+    isAnimating = false; // already at target
+  });
+
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('mousemove', onMouse);
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mouseup', onUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('click', onClick);
+  document.getElementById('sb-close').addEventListener('click', closeSidebar);
+
+  loop();
+}
+
+function autoFit() {
+  if (!nodes.length) return;
+  // Bounding box with label width estimate for visible labels
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    const deg = adj[n.idx]?.length || 0;
+    const labelW = deg >= 3 ? n.id.length * 11 + 50 : 0;
+    minX = Math.min(minX, n.x - 12);
+    maxX = Math.max(maxX, n.x + labelW);
+    minY = Math.min(minY, n.y - 12);
+    maxY = Math.max(maxY, n.y + 12);
+  }
+  const graphW = maxX - minX || 1;
+  const graphH = maxY - minY || 1;
+  const PILL_AREA = 340;
+  // Shrink the bounding box fit by 20% for generous void around content
+  const PAD = 60;
+  const availW = W - PILL_AREA - PAD * 2;
+  const availH = H - PAD * 2;
+  scale = Math.min(availW / graphW, availH / graphH) * 0.80;
+  scale = Math.max(0.4, Math.min(2.5, scale));
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  // Shift center rightward to account for pill area
+  panX = PILL_AREA / 2 + 10 - cx * scale;
+  panY = -cy * scale;
+}
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+function tick() {
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < nodes.length; j++) {
+      const b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1) d2 = 1;
+      const f = REPULSION / d2;
+      a.vx += dx * f; a.vy += dy * f;
+      b.vx -= dx * f; b.vy -= dy * f;
+    }
+  }
+
+  for (const [si, ti] of edges) {
+    const a = nodes[si], b = nodes[ti];
+    let dx = b.x - a.x, dy = b.y - a.y;
+    let d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = (d - REST_LEN) * ATTRACTION;
+    const fx = (dx / d) * f, fy = (dy / d) * f;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
+  }
+
+  // Center pull — slightly offset right to avoid timeline
+  const CX = 120;
+  for (const n of nodes) {
+    n.vx -= (n.x - CX) * CENTER_PULL;
+    n.vy -= n.y * CENTER_PULL;
+  }
+
+  for (const n of nodes) {
+    if (n === drag) continue;
+    n.vx *= DAMPING; n.vy *= DAMPING;
+    n.x += n.vx; n.y += n.vy;
+  }
+}
+
+function nodeRadius(n) {
+  const deg = adj[n.idx]?.length || 0;
+  return Math.max(10, Math.min(30, deg * 3 + 6));
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2 + panX, H / 2 + panY);
+  ctx.scale(scale, scale);
+
+  const hl = hovered || selected;
+  const hlNeighbors = hl ? new Set([hl.idx, ...adj[hl.idx]]) : null;
+
+  // Which meeting is highlighted?
+  const hlMeeting = hoveredMeeting || (selected && selected.type === 'meeting' ? selected : null);
+  const hlMeetingEntities = hlMeeting ? new Set(hlMeeting.entityIndices) : null;
+
+  // When zoomed out (outer/workflow), boost visibility
+  const zoomed = scale < 0.3;
+
+  // ── Entity edges ──
+  for (const [si, ti] of edges) {
+    const a = nodes[si], b = nodes[ti];
+    const active = hlNeighbors && (hlNeighbors.has(si) && hlNeighbors.has(ti));
+    const meetingHL = hlMeetingEntities && (hlMeetingEntities.has(si) && hlMeetingEntities.has(ti));
+    const dimmed = (hlNeighbors && !active) || (hlMeeting && !meetingHL);
+    ctx.strokeStyle = active || meetingHL ? '#a3a3a3' : dimmed ? '#f0f0f0' : zoomed ? '#c8c8c8' : '#e5e5e5';
+    ctx.lineWidth = active || meetingHL ? 2.5 : zoomed ? 2.5 : 1.2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  // ── Entity nodes ──
+  for (const n of nodes) {
+    const baseR = nodeRadius(n);
+    const r = zoomed ? baseR * 1.5 : baseR;
+    const deg = adj[n.idx]?.length || 0;
+    const isActive = hlNeighbors ? hlNeighbors.has(n.idx) : true;
+    const isMeetingActive = hlMeetingEntities ? hlMeetingEntities.has(n.idx) : false;
+    const isCenter = hl && hl.type !== 'meeting' && n.idx === hl.idx;
+    const isSel = selected && selected.type !== 'meeting' && n.idx === selected.idx;
+
+    const lit = isActive || isMeetingActive;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = lit ? COLORS[n.type] : '#ebebeb';
+    ctx.fill();
+
+    if (isSel) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = COLORS[n.type];
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    const showLabel = isCenter || isSel || isMeetingActive ||
+      (hlNeighbors === null && !hlMeeting && (zoomed ? deg >= 1 : deg >= 3)) ||
+      (hlNeighbors && isActive && deg >= 1);
+
+    if (showLabel) {
+      const fs = isCenter || isMeetingActive ? 20 : zoomed ? Math.max(18, Math.min(24, deg + 14)) : Math.max(15, Math.min(19, deg + 11));
+      ctx.font = `${isCenter ? 600 : 500} ${fs}px "JetBrains Mono", monospace`;
+      ctx.fillStyle = lit ? (zoomed ? '#333' : '#404040') : '#d4d4d4';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`[[${n.id}]]`, n.x + r + 6, n.y);
+    }
+  }
+
+  // ── Meeting nodes (timeline) — rendered in screen space ──
+  ctx.restore(); // exit world transform
+  ctx.save();    // fresh screen-space context
+
+  // Skip meetings when fully faded
+  if (meetingsAlpha < 0.01) { ctx.restore(); return; }
+  ctx.globalAlpha = meetingsAlpha;
+
+  // Draw meetings in screen space (fixed position, no zoom)
+  const PILL_W = 300, PILL_H = 58, PILL_RR = 12;
+  const PILL_GAP = 8;
+  const totalPillH = meetings.length * PILL_H + (meetings.length - 1) * PILL_GAP;
+  const pillStartY = Math.max(60, (H - totalPillH) / 2);
+  const PILL_LEFT = 16;
+
+  // Timeline spine
+  ctx.strokeStyle = '#e5e5e5';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  ctx.moveTo(PILL_LEFT + PILL_W / 2, pillStartY - 12);
+  ctx.lineTo(PILL_LEFT + PILL_W / 2, pillStartY + totalPillH + 12);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (let mi = 0; mi < meetings.length; mi++) {
+    const m = meetings[mi];
+    const isHl = hlMeeting && hlMeeting.idx === mi;
+    const isSel = selected && selected.type === 'meeting' && selected.idx === mi;
+
+    const px = PILL_LEFT, py = pillStartY + mi * (PILL_H + PILL_GAP);
+
+    // Store screen position for hit testing
+    m._screenX = px;
+    m._screenY = py;
+
+    // Draw meeting→entity edges from pill to world-space entities
+    const edgeSrcX = px + PILL_W;
+    const edgeSrcY = py + PILL_H / 2;
+    for (const ei of m.entityIndices) {
+      const e = nodes[ei];
+      const ex = W / 2 + panX + e.x * scale;
+      const ey = H / 2 + panY + e.y * scale;
+      const meetActive = isHl || isSel;
+      const entityActive = hlNeighbors && hlNeighbors.has(ei);
+      const active = meetActive || entityActive;
+      const dimmed = (hlMeeting && !meetActive) || (hlNeighbors && !entityActive);
+      ctx.strokeStyle = active ? '#86efac' : dimmed ? 'rgba(167,243,208,0.06)' : 'rgba(167,243,208,0.12)';
+      ctx.lineWidth = active ? 2.5 : 0.8;
+      ctx.beginPath();
+      ctx.moveTo(edgeSrcX, edgeSrcY);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    // Pill background
+    ctx.beginPath();
+    ctx.moveTo(px + PILL_RR, py);
+    ctx.lineTo(px + PILL_W - PILL_RR, py);
+    ctx.quadraticCurveTo(px + PILL_W, py, px + PILL_W, py + PILL_RR);
+    ctx.lineTo(px + PILL_W, py + PILL_H - PILL_RR);
+    ctx.quadraticCurveTo(px + PILL_W, py + PILL_H, px + PILL_W - PILL_RR, py + PILL_H);
+    ctx.lineTo(px + PILL_RR, py + PILL_H);
+    ctx.quadraticCurveTo(px, py + PILL_H, px, py + PILL_H - PILL_RR);
+    ctx.lineTo(px, py + PILL_RR);
+    ctx.quadraticCurveTo(px, py, px + PILL_RR, py);
+    ctx.closePath();
+
+    ctx.fillStyle = isHl || isSel ? '#ecfdf5' : '#fff';
+    ctx.fill();
+    ctx.strokeStyle = isHl || isSel ? '#86efac' : '#e5e5e5';
+    ctx.lineWidth = isHl || isSel ? 2.5 : 1.2;
+    ctx.stroke();
+
+    // Date
+    ctx.font = '400 14px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#a3a3a3';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(m.date, px + 16, py + 10);
+
+    // Title (truncated)
+    ctx.font = '500 16px "JetBrains Mono", monospace';
+    ctx.fillStyle = isHl || isSel ? '#171717' : '#525252';
+    ctx.textBaseline = 'bottom';
+    let title = m.title;
+    if (ctx.measureText(title).width > PILL_W - 32) {
+      while (ctx.measureText(title + '…').width > PILL_W - 32 && title.length > 0) title = title.slice(0, -1);
+      title += '…';
+    }
+    ctx.fillText(title, px + 16, py + PILL_H - 10);
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(px + PILL_W / 2, py + PILL_H / 2, 5, 0, Math.PI * 2);
+    ctx.fillStyle = isHl || isSel ? '#34d399' : 'transparent';
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+}
+
+function loop() {
+  animateCamera();
+  tick(); draw();
+  requestAnimationFrame(loop);
+}
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - W / 2 - panX) / scale,
+    y: (sy - H / 2 - panY) / scale
+  };
+}
+
+function findNode(sx, sy) {
+  // Check meetings first (screen-space pill hit test)
+  for (const m of meetings) {
+    if (m._screenX !== undefined) {
+      const PILL_W = 300, PILL_H = 62;
+      if (sx >= m._screenX && sx <= m._screenX + PILL_W &&
+          sy >= m._screenY && sy <= m._screenY + PILL_H) {
+        return m;
+      }
+    }
+  }
+  // Then entity nodes (world space)
+  const { x, y } = screenToWorld(sx, sy);
+  let best = null, bestD = 24 / scale;
+  for (const n of nodes) {
+    const d = Math.hypot(n.x - x, n.y - y);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return best;
+}
+
+let mouseDownPos = null;
+function onMouse(e) {
+  if (drag) {
+    const { x, y } = screenToWorld(e.clientX, e.clientY);
+    drag.x = x; drag.y = y;
+    drag.vx = 0; drag.vy = 0;
+    return;
+  }
+  if (isPanning && panStart) {
+    panX = panStart.px + (e.clientX - panStart.mx);
+    panY = panStart.py + (e.clientY - panStart.my);
+    return;
+  }
+  const found = findNode(e.clientX, e.clientY);
+  if (found && found.type === 'meeting') {
+    hoveredMeeting = found;
+    hovered = null;
+  } else {
+    hoveredMeeting = null;
+    hovered = found;
+  }
+  canvas.style.cursor = found ? 'pointer' : 'grab';
+}
+
+function onDown(e) {
+  if (workflowVisible || outerVisible || isAnimating) return;
+  mouseDownPos = { x: e.clientX, y: e.clientY };
+  const found = findNode(e.clientX, e.clientY);
+  if (found && found.type !== 'meeting') {
+    drag = found;
+    canvas.classList.add('dragging');
+  } else if (!found) {
+    isPanning = true;
+    panStart = { mx: e.clientX, my: e.clientY, px: panX, py: panY };
+    canvas.classList.add('dragging');
+  }
+}
+
+function onUp(e) {
+  drag = null;
+  isPanning = false;
+  panStart = null;
+  canvas.classList.remove('dragging');
+}
+
+function onClick(e) {
+  if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5) return;
+  const found = findNode(e.clientX, e.clientY);
+  if (found) {
+    selected = found;
+    openSidebar(found);
+  } else {
+    closeSidebar();
+  }
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  if (workflowVisible || outerVisible || isAnimating) return;
+  scale *= e.deltaY > 0 ? 0.93 : 1.07;
+  scale = Math.max(0.2, Math.min(5, scale));
+}
+
+// ── Markdown renderer ──
+function renderMarkdown(md) {
+  // Escape HTML
+  let html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // Wiki-links [[Entity Name]] → clickable links
+  html = html.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
+    const escaped = name.replace(/"/g, '&quot;');
+    return `<a class="wiki-link" data-entity="${escaped}">[[${name}]]</a>`;
+  });
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Unordered lists — collect consecutive lines
+  html = html.replace(/^((?:- .+\n?)+)/gm, (block) => {
+    const items = block.trim().split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // Paragraphs — wrap non-tag lines
+  html = html.split('\n\n').map(block => {
+    block = block.trim();
+    if (!block) return '';
+    if (/^<(h[1-3]|ul|ol|li|p)/.test(block)) return block;
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+
+  return html;
+}
+
+// ── Sidebar ──
+function slugify(name) {
+  return name.toLowerCase().replace(/['']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+const TYPE_FOLDERS = { contact: 'contacts', company: 'companies', product: 'products' };
+
+function openSidebar(n) {
+  const sb = document.getElementById('sidebar');
+
+  if (n.type === 'meeting') {
+    return openMeetingSidebar(n);
+  }
+
+  const deg = adj[n.idx]?.length || 0;
+
+  document.getElementById('sb-name').textContent = `[[${n.id}]]`;
+
+  const typeEl = document.getElementById('sb-type');
+  typeEl.innerHTML = `<span class="type-dot" style="background:${COLORS[n.type]}"></span>${n.type}`;
+
+  // Fetch entity markdown
+  const contentEl = document.getElementById('sb-content');
+  contentEl.className = 'entity-content-loading';
+  contentEl.textContent = 'loading...';
+
+  const folder = TYPE_FOLDERS[n.type] || 'contacts';
+  const slug = slugify(n.id);
+  fetch(`knowledge/entities/${folder}/${slug}.md`)
+    .then(r => r.ok ? r.text() : Promise.reject())
+    .then(md => {
+      contentEl.className = 'entity-content';
+      contentEl.innerHTML = renderMarkdown(md);
+      wireWikiLinks(contentEl);
+    })
+    .catch(() => {
+      contentEl.className = 'entity-content-loading';
+      contentEl.textContent = 'no profile found';
+    });
+
+  document.getElementById('sb-stats').textContent = `${deg} connection${deg !== 1 ? 's' : ''}`;
+
+  const list = document.getElementById('sb-connections');
+  list.innerHTML = '';
+
+  const order = { company: 0, product: 1, contact: 2 };
+  const neighbors = adj[n.idx]
+    .map(i => nodes[i])
+    .sort((a, b) => (order[a.type] || 9) - (order[b.type] || 9));
+
+  neighbors.forEach(nb => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="cdot" style="background:${COLORS[nb.type]}"></span>[[${nb.id}]]`;
+    li.addEventListener('click', () => {
+      selected = nb;
+      openSidebar(nb);
+    });
+    list.appendChild(li);
+  });
+
+  sb.classList.add('open');
+}
+
+function openMeetingSidebar(m) {
+  const sb = document.getElementById('sidebar');
+  document.getElementById('sb-name').textContent = m.title;
+  const typeEl = document.getElementById('sb-type');
+  typeEl.innerHTML = `<span class="type-dot" style="background:${COLORS.meeting}"></span>meeting · ${m.date}`;
+
+  // Fetch meeting minutes markdown
+  const contentEl = document.getElementById('sb-content');
+  contentEl.className = 'entity-content-loading';
+  contentEl.textContent = 'loading...';
+
+  fetch(`knowledge/meetings/${m.id}.md`)
+    .then(r => r.ok ? r.text() : Promise.reject())
+    .then(md => {
+      contentEl.className = 'entity-content';
+      contentEl.innerHTML = renderMarkdown(md);
+      wireWikiLinks(contentEl);
+    })
+    .catch(() => {
+      contentEl.className = 'entity-content-loading';
+      contentEl.textContent = 'no minutes found';
+    });
+
+  document.getElementById('sb-stats').textContent =
+    `${m.entityIndices.length} referenced entit${m.entityIndices.length !== 1 ? 'ies' : 'y'}`;
+
+  const list = document.getElementById('sb-connections');
+  list.innerHTML = '';
+
+  const order = { company: 0, product: 1, contact: 2 };
+  const referenced = m.entityIndices
+    .map(i => nodes[i])
+    .sort((a, b) => (order[a.type] || 9) - (order[b.type] || 9));
+
+  referenced.forEach(nb => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="cdot" style="background:${COLORS[nb.type]}"></span>[[${nb.id}]]`;
+    li.addEventListener('click', () => {
+      selected = nb;
+      openSidebar(nb);
+    });
+    list.appendChild(li);
+  });
+
+  sb.classList.add('open');
+}
+
+function wireWikiLinks(el) {
+  el.querySelectorAll('a.wiki-link').forEach(a => {
+    const name = a.dataset.entity;
+    // Check if it's a meeting reference (starts with date pattern)
+    const meeting = meetings.find(m => m.id === name);
+    if (meeting) a.classList.add('meeting-link');
+
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      // Try entity nodes first
+      const target = nodes.find(n => n.id === name);
+      if (target) { selected = target; openSidebar(target); return; }
+      // Try meeting IDs (e.g. [[2026-02-11-steering-committee]])
+      if (meeting) { selected = meeting; openSidebar(meeting); return; }
+    });
+  });
+}
+
+function closeSidebar() {
+  selected = null;
+  hoveredMeeting = null;
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+// ── Workflow helicopter zoom ──
+const wfBack = document.getElementById('wf-back');
+const wfDive = document.getElementById('wf-dive');
+const workflowOverlay = document.getElementById('workflow-overlay');
+const outerOverlay = document.getElementById('outer-overlay');
+let workflowVisible = false; // start hidden — outer is default now
+let outerVisible = true; // start in outer view
+
+// Animation state — graph scale when zoomed in (computed after autoFit)
+let graphScale = 1, graphPanX = 0, graphPanY = 0;
+let targetScale = 1, targetPanX = 0, targetPanY = 0;
+let meetingsAlpha = 0; // start hidden
+let targetMeetingsAlpha = 0;
+let isAnimating = false;
+
+const WF_SCALE = 0.15; // zoomed-out scale for workflow view
+const OUTER_SCALE = 0.24; // larger scale so graph is visible in workspace card
+
+// Compute pan offsets to center the tiny graph behind the knowledge node
+// Knowledge node is at (336, 206) within the 900x560 workflow stage
+// CSS transform: scale(1.35) from center shifts positions proportionally
+function getWfPan() {
+  const stageW = 900, stageH = 560;
+  const STAGE_SCALE = 1.35;
+  const knowledgeX = 336, knowledgeY = 206;
+  // Stage center is at screen center; CSS transform scales from center
+  return {
+    x: (knowledgeX - stageW / 2) * STAGE_SCALE,
+    y: (knowledgeY - stageH / 2) * STAGE_SCALE
+  };
+}
+
+// Compute pan offsets to center tiny graph inside workspace card
+// Must account for graph centroid offset: autoFit stores centroid info
+// in graphPanX/graphPanY at graphScale. Centroid in graph coords:
+//   cx = (PILL_OFFSET - graphPanX) / graphScale
+//   cy = -graphPanY / graphScale
+// At WF_SCALE, centroid screen offset = cx*WF_SCALE, cy*WF_SCALE
+function getOuterPan() {
+  const card = document.getElementById('workspace-card');
+  if (!card) return { x: 0, y: 0 };
+  const rect = card.getBoundingClientRect();
+  const labelH = 56;
+  const cardCX = rect.left + rect.width / 2;
+  const cardCY = rect.top + (rect.height - labelH) / 2;
+  // Graph centroid offset at OUTER_SCALE
+  const PILL_OFFSET = 180; // PILL_AREA/2 + 10 from autoFit
+  const ratio = OUTER_SCALE / graphScale;
+  const centroidOffX = (PILL_OFFSET - graphPanX) * ratio;
+  const centroidOffY = -graphPanY * ratio;
+  return {
+    x: cardCX - W / 2 - centroidOffX,
+    y: cardCY - H / 2 - centroidOffY
+  };
+}
+
+function enterWorkflow() {
+  workflowVisible = true;
+  outerVisible = false;
+  closeSidebar();
+  outerOverlay.classList.remove('visible');
+  document.body.classList.remove('outer-mode');
+  const wfPan = getWfPan();
+  targetScale = WF_SCALE;
+  targetPanX = wfPan.x;
+  targetPanY = wfPan.y;
+  targetMeetingsAlpha = 0;
+  isAnimating = true;
+  setTimeout(() => {
+    workflowOverlay.classList.add('visible');
+  }, 300);
+  document.body.classList.add('wf-mode');
+  // Start workflow runner on first entry
+  if (typeof startWorkflowIfNeeded === 'function') startWorkflowIfNeeded();
+}
+
+function exitWorkflow() {
+  workflowVisible = false;
+  workflowOverlay.classList.remove('visible');
+  targetScale = graphScale;
+  targetPanX = graphPanX;
+  targetPanY = graphPanY;
+  targetMeetingsAlpha = 1;
+  isAnimating = true;
+  document.body.classList.remove('wf-mode');
+}
+
+function enterOuter() {
+  outerVisible = true;
+  workflowVisible = false;
+  closeSidebar();
+  workflowOverlay.classList.remove('visible');
+  outerOverlay.classList.add('visible');
+  document.body.classList.add('outer-mode');
+  document.body.classList.remove('wf-mode');
+  // Center graph inside workspace card at larger scale
+  const outerPan = getOuterPan();
+  targetScale = OUTER_SCALE;
+  targetPanX = outerPan.x;
+  targetPanY = outerPan.y;
+  targetMeetingsAlpha = 0;
+  isAnimating = true;
+}
+
+function exitOuter() {
+  outerVisible = false;
+  outerOverlay.classList.remove('visible');
+  document.body.classList.remove('outer-mode');
+  enterWorkflow();
+}
+
+// Smooth lerp for camera animation (called each frame)
+function animateCamera() {
+  if (!isAnimating) return;
+  const LERP = 0.08;
+  scale += (targetScale - scale) * LERP;
+  panX += (targetPanX - panX) * LERP;
+  panY += (targetPanY - panY) * LERP;
+  meetingsAlpha += (targetMeetingsAlpha - meetingsAlpha) * LERP;
+  if (Math.abs(scale - targetScale) < 0.001 &&
+      Math.abs(panX - targetPanX) < 0.5 &&
+      Math.abs(panY - targetPanY) < 0.5 &&
+      Math.abs(meetingsAlpha - targetMeetingsAlpha) < 0.01) {
+    scale = targetScale;
+    panX = targetPanX;
+    panY = targetPanY;
+    meetingsAlpha = targetMeetingsAlpha;
+    isAnimating = false;
+  }
+}
+
+// Center click → dive into graph
+wfDive.addEventListener('click', () => {
+  if (workflowVisible) exitWorkflow();
+});
+
+// Back button — contextual: graph→workflow→outer
+wfBack.addEventListener('click', () => {
+  if (!workflowVisible && !outerVisible) {
+    // In graph → go to workflow
+    enterWorkflow();
+  } else if (workflowVisible && !outerVisible) {
+    // In workflow → go to outer
+    enterOuter();
+  }
+});
+
+// Escape key — contextual: graph→workflow→outer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!workflowVisible && !outerVisible) {
+      enterWorkflow();
+    } else if (workflowVisible && !outerVisible) {
+      enterOuter();
+    }
+  }
+});
+
+// ── Outer view: user selection + carousel workspace ──
+let activeOuterUser = 'bob';
+const workspaceCard = document.getElementById('workspace-card');
+const workspaceUserLabel = document.getElementById('workspace-user-label');
+
+// User clicks in Vexa panel → expand meetings + carousel workspace
+document.querySelectorAll('.vexa-user').forEach(el => {
+  el.addEventListener('click', () => {
+    const user = el.dataset.user;
+    if (user === activeOuterUser) return; // already selected
+    // Deactivate previous user
+    document.querySelectorAll('.vexa-user').forEach(u => u.classList.remove('active'));
+    el.classList.add('active');
+    activeOuterUser = user;
+    const name = el.querySelector('.vexa-user-name').textContent;
+    // Carousel slide animation
+    workspaceCard.classList.add('slide-out');
+    setTimeout(() => {
+      workspaceUserLabel.textContent = name + "'s workspace";
+      workspaceCard.classList.remove('slide-out');
+      workspaceCard.classList.add('slide-in-setup');
+      // Force reflow then animate in
+      workspaceCard.offsetHeight;
+      workspaceCard.classList.remove('slide-in-setup');
+      workspaceCard.classList.add('slide-in');
+      setTimeout(() => workspaceCard.classList.remove('slide-in'), 350);
+    }, 250);
+  });
+});
+
+// Workspace card click → enter workflow
+workspaceCard.addEventListener('click', () => exitOuter());
+
+// ── Interactive workflow runner ──
+const wfDot = document.getElementById('wf-dot');
+const wfSend = document.getElementById('wf-send');
+const wfHumanActions = document.getElementById('wf-human-actions');
+const wfApprove = document.getElementById('wf-approve');
+const wfEdit = document.getElementById('wf-edit');
+const wfDismissBtn = document.getElementById('wf-dismiss');
+const wfSelfGlow = document.querySelector('.wf-selfloop-glow');
+const wfKnowledgeBox = document.querySelector('.wf-knowledge-box');
+const wfTranscriptNode = document.querySelector('.wn-transcript');
+const wfArtifactsNode = document.querySelector('.wn-artifacts');
+const wfHumanNode = document.querySelector('.wn-human');
+const wfCounter = document.getElementById('wf-counter');
+
+// Key positions in SVG coords (matching node centers)
+const POS = {
+  transcript: [50, 206],
+  knowledgeLeft: [216, 206],
+  knowledgeCenter: [336, 206],
+  knowledgeRight: [456, 206],
+  artifacts: [710, 206],
+  humanTop: [710, 320],
+  human: [710, 434],
+  returnLeft: [336, 434],
+  knowledgeBottom: [336, 306],
+  dismiss: [760, 520],
+};
+
+function setDot(x, y, opacity) {
+  wfDot.setAttribute('cx', x);
+  wfDot.setAttribute('cy', y);
+  wfDot.setAttribute('opacity', opacity ?? 1);
+}
+
+function animateDot(from, to, duration) {
+  return new Promise(resolve => {
+    const startTime = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - startTime) / duration);
+      const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      setDot(from[0] + (to[0] - from[0]) * e,
+             from[1] + (to[1] - from[1]) * e);
+      if (t < 1) requestAnimationFrame(step);
+      else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function animatePath(waypoints, totalDuration) {
+  // Chain through multiple waypoints
+  const segs = [];
+  let totalDist = 0;
+  for (let i = 1; i < waypoints.length; i++) {
+    const d = Math.hypot(waypoints[i][0] - waypoints[i-1][0],
+                         waypoints[i][1] - waypoints[i-1][1]);
+    segs.push(d);
+    totalDist += d;
+  }
+  let chain = Promise.resolve();
+  for (let i = 1; i < waypoints.length; i++) {
+    const from = waypoints[i-1], to = waypoints[i];
+    const dur = totalDuration * (segs[i-1] / totalDist);
+    chain = chain.then(() => animateDot(from, to, dur));
+  }
+  return chain;
+}
+
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function waitForClick(...btns) {
+  return new Promise(resolve => {
+    function handler(id) {
+      btns.forEach(([b]) => b.removeEventListener('click', b._h));
+      resolve(id);
+    }
+    btns.forEach(([btn, id]) => {
+      btn._h = () => handler(id);
+      btn.addEventListener('click', btn._h);
+    });
+  });
+}
+
+let meetingNum = 0;
+let gitVersion = 0;
+const wfGitLog = document.getElementById('wf-git-log');
+const wfGitEntries = document.getElementById('wf-git-entries');
+const wfIntegrations = document.querySelector('.wf-integrations');
+
+function randomHash() {
+  return Math.random().toString(16).slice(2, 9);
+}
+
+function addGitEntry(type, msg) {
+  gitVersion++;
+  const entry = document.createElement('div');
+  entry.className = `wf-git-entry ${type}`;
+  const hash = randomHash();
+  entry.innerHTML = `<span class="wf-git-hash">${hash}</span><span class="wf-git-msg">${msg}</span>`;
+  wfGitEntries.prepend(entry);
+  // Show the log if hidden
+  wfGitLog.classList.add('visible');
+  // Auto-scroll to top (newest)
+  wfGitLog.scrollTop = 0;
+}
+
+async function runWorkflowCycle() {
+  // Reset all states
+  wfTranscriptNode.classList.remove('wf-green');
+  wfArtifactsNode.classList.remove('wf-green');
+  wfHumanNode.classList.remove('wf-orange');
+  wfKnowledgeBox.classList.remove('wf-green', 'wf-pulse');
+  wfSelfGlow.classList.remove('active');
+  wfHumanActions.classList.remove('visible');
+  // Keep integrations visible once shown (persists across cycles like git log)
+  wfDot.setAttribute('opacity', '0');
+  wfDot.setAttribute('fill', '#34d399');
+  wfSend.disabled = false;
+  wfCounter.textContent = meetingNum || 'N';
+
+  // Step 1: Transcript is green, waiting for push
+  wfTranscriptNode.classList.add('wf-green');
+  await new Promise(r => wfSend.addEventListener('click', r, { once: true }));
+  wfSend.disabled = true;
+  wfTranscriptNode.classList.remove('wf-green');
+
+  // Step 2: Runner goes transcript → knowledge
+  setDot(...POS.transcript, 1);
+  await animateDot(POS.transcript, POS.knowledgeLeft, 600);
+  setDot(...POS.knowledgeCenter, 0); // dot enters box, hides
+
+  // Step 3: Compounding — self-loop animates, counter ticks
+  wfKnowledgeBox.classList.add('wf-green', 'wf-pulse');
+  wfSelfGlow.classList.add('active');
+  const loops = 2 + Math.floor(Math.random() * 4); // 2-5 meetings
+  for (let i = 0; i < loops; i++) {
+    meetingNum++;
+    wfCounter.textContent = meetingNum;
+    await wait(1200);
+  }
+  wfSelfGlow.classList.remove('active');
+  wfKnowledgeBox.classList.remove('wf-pulse');
+
+  // Step 4: Runner exits knowledge → artifacts
+  setDot(...POS.knowledgeRight, 1);
+  await animateDot(POS.knowledgeRight, POS.artifacts, 800);
+  wfKnowledgeBox.classList.remove('wf-green');
+  wfArtifactsNode.classList.add('wf-green');
+  await wait(400);
+
+  // Step 5: Runner goes artifacts → human
+  await animatePath([POS.artifacts, POS.humanTop, POS.human], 800);
+  wfArtifactsNode.classList.remove('wf-green');
+  wfHumanNode.classList.add('wf-orange');
+  wfDot.setAttribute('fill', '#f59e0b');
+  wfDot.setAttribute('opacity', '0.6');
+
+  // Step 6: Show action buttons, wait for choice
+  wfHumanActions.classList.add('visible');
+  const choice = await waitForClick(
+    [wfApprove, 'approve'], [wfEdit, 'edit'], [wfDismissBtn, 'dismiss']
+  );
+  wfHumanActions.classList.remove('visible');
+  wfHumanNode.classList.remove('wf-orange');
+
+  // Step 7: Animate based on choice + git commit + integrations
+  if (choice === 'approve') {
+    addGitEntry('approve', `update knowledge (meeting ${meetingNum})`);
+    // Flash integration badges
+    wfIntegrations.classList.add('visible');
+    wfDot.setAttribute('fill', '#34d399');
+    wfDot.setAttribute('opacity', '1');
+    await animatePath([POS.human, POS.returnLeft, POS.knowledgeBottom], 1200);
+    wfKnowledgeBox.classList.add('wf-green');
+    wfDot.setAttribute('opacity', '0');
+    await wait(800);
+    wfKnowledgeBox.classList.remove('wf-green');
+  } else if (choice === 'edit') {
+    addGitEntry('edit', `edit & commit (meeting ${meetingNum})`);
+    wfIntegrations.classList.add('visible');
+    wfDot.setAttribute('fill', '#34d399');
+    wfDot.setAttribute('opacity', '1');
+    await animatePath([POS.human, POS.returnLeft, POS.knowledgeBottom], 1200);
+    wfKnowledgeBox.classList.add('wf-green');
+    wfDot.setAttribute('opacity', '0');
+    await wait(800);
+    wfKnowledgeBox.classList.remove('wf-green');
+  } else {
+    // dismiss — dot goes down-right and fades, no commit
+    addGitEntry('dismiss', `dismissed (meeting ${meetingNum})`);
+    wfDot.setAttribute('fill', '#ef4444');
+    wfDot.setAttribute('opacity', '1');
+    await animateDot(POS.human, POS.dismiss, 600);
+    wfDot.setAttribute('opacity', '0');
+    await wait(400);
+  }
+
+  // Loop
+  await wait(600);
+  runWorkflowCycle();
+}
+
+// Start the cycle when workflow becomes visible (deferred from outer view)
+let workflowCycleStarted = false;
+function startWorkflowIfNeeded() {
+  if (!workflowCycleStarted) {
+    workflowCycleStarted = true;
+    runWorkflowCycle();
+  }
+}
+
+init();
+</script>
+
+</body>
+</html>
