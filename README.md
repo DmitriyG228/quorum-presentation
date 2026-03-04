@@ -2,7 +2,7 @@
 
 **Team Skynets Interns | DTCC 2026 FINOS Hackathon**
 
-> **[Try the interactive presentation](https://finos-labs.github.io/dtcch-2026-skynets-interns/presentation/graph.html)** — a 3-level zoom-in webapp. Click to explore.
+> **[Try the interactive presentation](https://dmitriyg228.github.io/quorum-presentation/graph.html)** — a 3-level zoom-in webapp. Click to explore.
 
 ---
 
@@ -163,7 +163,7 @@ qrum approve       # accept → knowledge base grows
 qrum chat "What did we discuss?"
 ```
 
-Or explore the **[interactive presentation](https://finos-labs.github.io/dtcch-2026-skynets-interns/presentation/graph.html)**.
+Or explore the **[interactive presentation](https://dmitriyg228.github.io/quorum-presentation/graph.html)**.
 
 ---
 
